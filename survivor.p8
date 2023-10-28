@@ -29,13 +29,15 @@ player = {
 	sprite_move1=2,
 	sprite_move2=3,
 	sprite_grace=4,
-	sprite_update_counter=0,
-	sprite_update_delay=5,
 
 	x=512,
 	y=256,
 	speed=0.5,
 	direction=0,
+
+	init=function(self)
+		self.sprite_moving_routing = cocreate(self.update_sprite_routine)
+	end,
 
 	draw=function(self)
 		self:draw_ui()
@@ -64,120 +66,123 @@ player = {
 	update=function(self)
 		self:update_movements()
 		self:update_grace()
-		self:update_sprite()
 		self:update_level()
 		self:update_proj()
- end,
+		self:update_sprite()
+	end,
 
- update_movements=function(self)
- 	if btn(0) or btn(1) or btn(2) or btn(3) then
-	 	self.is_moving=true
-		 if btn(0) then
-		 	self.direction = 0
-	  	self.x = self.x - self.speed
-	  elseif btn(1) then
-	  	self.direction = 1
-	 	 self.x = self.x + self.speed
-	  end
+	update_movements=function(self)
+		if btn(0) or btn(1) or btn(2) or btn(3) then
+			self.is_moving=true
+			if btn(0) then
+				self.direction = 0
+				self.x = self.x - self.speed
+			elseif btn(1) then
+				self.direction = 1
+				self.x = self.x + self.speed
+			end
 
 			if btn(2) then
 				self.direction = 2
-	  	self.y = self.y - self.speed
-	  elseif btn(3) then
-	  	self.direction = 3
-	  	self.y = self.y + self.speed
-	  end
-	 else
-	 	self.is_moving=false
-	 end
- end,
+				self.y = self.y - self.speed
+			elseif btn(3) then
+				self.direction = 3
+				self.y = self.y + self.speed
+			end
+		else
+			self.is_moving=false
+		end
+	end,
 
- update_sprite=function(self)
- 	if self.grace_on then
- 		if (self.grace_counter / 2 ) % 2 == 0 then
- 			self.sprite = self.sprite_idle
- 		else
- 			self.sprite = self.sprite_grace
- 		end
- 		return
- 	end
- 	self.sprite_update_counter = self.sprite_update_counter + 1
-  if self.is_moving and self.sprite_update_counter >= self.sprite_update_delay then
-	 	self.sprite_update_counter = 0
-	 	if self.sprite == self.sprite_move1 or self.sprite == self.sprite_idle then
-	 		self.sprite = self.sprite_move2
-	 	elseif self.sprite == self.sprite_move2 then
-	 		self.sprite = self.sprite_move1
-	 	end
-	 elseif self.is_moving == false then
-	 	self.sprite = self.sprite_idle
-	 end
- end,
+	update_sprite=function(self)
+		if costatus(self.sprite_moving_routing) != "dead" then
+			coresume(self.sprite_moving_routing, self)
+		end
+	end,
 
- update_level=function(self)
-  if self.xp >= self.next_xp then
-  	sfx(sfx_level_up)
-  	self.xp = 0
-  	self.level = self.level + 1
-  	self.next_xp = ceil(self.next_xp * 1.5)
-  	state = state_lvl_up
-  end
- end,
+	update_sprite_routine=function(self)
+		while true do
+			if self.grace_on then
+				self.sprite = self.sprite_grace
+				delay(2)
+				self.sprite = self.sprite_idle
+				delay(2)
+			elseif self.is_moving then
+				self.sprite = self.sprite_move1
+				delay(5)
+				self.sprite = self.sprite_move2
+				delay(5)
+			else
+				self.sprite = self.sprite_idle
+				yield()
+			end
+		end
+	end,
 
- update_proj=function(self)
- 	self.proj_counter = self.proj_counter + 1
- 	if self.proj_counter >= self.proj_delay then
- 		self.proj_counter = 0
- 		local c = cocreate(function()
- 			for i=1, self.proj_count do
- 				self:add_projectile()
+	update_level=function(self)
+		if self.xp >= self.next_xp then
+			sfx(sfx_level_up)
+			self.xp = 0
+			self.level = self.level + 1
+			self.next_xp = ceil(self.next_xp * 1.5)
+			state = state_lvl_up
+		end
+	end,
+
+	update_proj=function(self)
+		self.proj_counter = self.proj_counter + 1
+		if self.proj_counter >= self.proj_delay then
+			self.proj_counter = 0
+			local c = cocreate(function()
+				for i=1, self.proj_count do
+					self:add_projectile()
 					delay(5)
- 			end
- 		end)
- 		add(actions, c)
- 	end
- 	for proj in all(self.proj) do
- 		proj:update()
- 	end
- end,
+				end
+			end)
+			add(actions, c)
+		end
+		for proj in all(self.proj) do
+			proj:update()
+		end
+	end,
 
- update_grace=function(self)
- 	self.grace_counter = self.grace_counter + 1
+	update_grace=function(self)
+		self.grace_counter = self.grace_counter + 1
 		if self.grace_counter >= self.grace_delay then
 			self.grace_counter = 0
 			self.grace_on = false
 		end
- end,
+	end,
 
- add_projectile=function(self)
- 	local bs = self.proj_speed_base
+	add_projectile=function(self)
+		local bs = self.proj_speed_base
 		local foe = closest_foe()
 		local angle = atan2(foe.x - self.x, foe.y - self.y)
- 	local proj = {
- 		damage=1 + self.proj_damage_x,
+		local proj = {
+			damage=1 + self.proj_damage_x,
 			speed=0.8 * self.proj_speed_x,
- 		sprite=50,
- 		x=flr(self.x),
- 		y=flr(self.y),
- 		distance=0,
- 		distance_max=100,
- 		angle=angle,
- 		draw=function(self)
- 			spr(self.sprite, self.x, self.y)
- 		end,
- 		update=function(self)
- 			self.distance = self.distance + 1
- 			if self.distance >= self.distance_max then
- 				del(player.proj, self)
- 			end
+			sprite=50,
+			x=flr(self.x),
+			y=flr(self.y),
+			distance=0,
+			distance_max=100,
+			angle=angle,
+			draw=function(self)
+				spr(self.sprite, self.x, self.y)
+			end,
+			update=function(self)
+				self.distance = self.distance + 1
+				if self.distance >= self.distance_max then
+					del(player.proj, self)
+				end
 
- 			self.x = self.x + self.speed * cos(self.angle)
- 			self.y = self.y + self.speed * sin(self.angle)
- 		end
- 	}
- 	sfx(sfx_proj)
- 	add(self.proj, proj)
- end,
+				self.x = self.x + self.speed * cos(self.angle)
+				self.y = self.y + self.speed * sin(self.angle)
+			end
+		}
+		sfx(sfx_proj)
+		add(self.proj, proj)
+	end,
 
 	hit_by_foe=function(self, foe)
 		if self.grace_on then
@@ -187,10 +192,10 @@ player = {
 		self.health = self.health - foe.attack
 	end,
 
- collect_xp=function(self, xp)
- 	self.xp = self.xp + xp
- 	sfx(sfx_xp)
- end
+	collect_xp=function(self, xp)
+		self.xp = self.xp + xp
+		sfx(sfx_xp)
+	end
 }
 
 -->8
@@ -248,16 +253,11 @@ world = {
 			y=y,
 			sprite=sprite,
 			speed=speed,
-			sprite_alt = sprite + 1,
-			sprite_update_counter=0,
-			sprite_update_delay=15,
-			sprite_is_alt=false,
+			init=function(self)
+				self.sprite_moving_routing = cocreate(self.update_sprite_routine)
+			end,
 			draw=function(self)
-				if self.sprite_is_alt then
-					spr(self.sprite_alt, self.x, self.y)
-				else
-					spr(self.sprite, self.x, self.y)
-				end
+				spr(self.sprite, self.x, self.y)
 			end,
 			update=function(self, player)
 				if is_colliding(self, player) then
@@ -299,13 +299,22 @@ world = {
 			end,
 
 			update_sprite=function(self)
-				self.sprite_update_counter = self.sprite_update_counter + 1
-   	if self.sprite_update_counter >= self.sprite_update_delay then
-   	 self.sprite_is_alt = not self.sprite_is_alt
-     self.sprite_update_counter = 0
-    end
+				if costatus(self.sprite_moving_routing) != "dead" then
+					coresume(self.sprite_moving_routing, self)
+				end
+			end,
+
+			update_sprite_routine=function(self)
+				local sprite = self.sprite
+				while true do
+					self.sprite = sprite
+					delay(10)
+					self.sprite = sprite + 1
+					delay(10)
+				end
 			end
 		}
+		foe:init()
 		add(self.foes, foe)
 	end,
 
@@ -314,22 +323,22 @@ world = {
 		if is_foe then
 			sprite = xp.sprite_foe
 		end
-	 local xp = {
- 	 x = flr(x),
- 	 y = flr(y),
-   value = ceil(value),
-   sprite= sprite,
-   draw=function(self)
-   	spr(self.sprite, self.x, self.y)
-   end,
-   update=function(self, player)
-  		if is_colliding(self, player) then
+		local xp = {
+			x = flr(x),
+			y = flr(y),
+			value = ceil(value),
+			sprite= sprite,
+			draw=function(self)
+				spr(self.sprite, self.x, self.y)
+			end,
+			update=function(self, player)
+				if is_colliding(self, player) then
 					player:collect_xp(self.value)
 					del(world.xp, self)
 				end
-   end
-  }
- 	add(self.xp, xp)
+			end
+		}
+		add(self.xp, xp)
 	end,
 
 	add_thing=function(self, x, y)
@@ -414,16 +423,16 @@ menu_lvl_up = {
 	make_options=function(self)
 		local copy = {}
 		for key, value in pairs(self.choices) do
-  	copy[key] = value
+			copy[key] = value
 		end
 		local option1 = rnd(copy)
 		del(copy, option1)
 		local option2 = rnd(copy)
 		del(copy, option2)
 		local options = {
-				option1,
-				option2,
-				rnd(copy)
+			option1,
+			option2,
+			rnd(copy)
 		}
 		return options
 	end,
@@ -466,7 +475,7 @@ actions={}
 function gen_random_xp()
 	for i=1, 256 do
 		world:add_xp(rnd(1024), rnd(512), rnd(3), false)
- end
+	end
 end
 
 function gen_things()
@@ -476,8 +485,8 @@ function gen_things()
 end
 
 function is_colliding(a,b)
-  return (abs(a.x-b.x)+
-    abs(a.y-b.y)) <= 8
+	return (abs(a.x-b.x)+
+	abs(a.y-b.y)) <= 8
 end
 
 function closest_foe()
@@ -494,15 +503,15 @@ function closest_foe()
 end
 
 function delay(frames)
-  for i=1,frames do
-    yield()
-  end
+	for i=1,frames do
+		yield()
+	end
 end
 
 function execute_actions()
 	for c in all(actions) do
- 	if (not coresume(c)) del(actions,c)
- end
+		if (not coresume(c)) del(actions,c)
+	end
 end
 -->8
 -- engine
@@ -516,6 +525,7 @@ function _init()
 	cls()
 	gen_random_xp()
 	gen_things()
+	player:init()
 end
 
 function _update60()
