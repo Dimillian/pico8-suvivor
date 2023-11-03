@@ -4,7 +4,7 @@ __lua__
 -- game & player
 game = {
 	name="grassland survivors",
-	version="0.6.5"
+	version="0.7"
 }
 
 player = {
@@ -28,7 +28,7 @@ player = {
 		self.weapons={ }
 		self.is_moving=false
 
-		self.grace_delay=50
+		self.grace_delay=25
 		self.grace_counter=0
 		self.grace_on=false
 
@@ -124,7 +124,7 @@ player = {
 		rectfill(x+3, y+4, x + 123, y + 6, 6)
 		if self.xp > 0 then
 			local xp_w = flr((self.xp / self.next_xp) * 123)
-			rectfill(x+4, y+5, x + xp_w, y + 5, 2)
+			rectfill(x+4, y+5, x + xp_w + 4, y + 5, 2)
 		end
 		print("lvl" .. player.level, x + 108, y + 2, 7)
 
@@ -216,7 +216,7 @@ player = {
 			sfx(sfx_level_up)
 			self.xp = 0
 			self.level += 1
-			self.next_xp = ceil(self.next_xp * 1.5)
+			self.next_xp = ceil(self.next_xp * 1.2)
 			state = state_lvl_up
 		end
 	end,
@@ -374,18 +374,24 @@ player = {
 				self.x = player.x + x_offset
 				self.y = player.y + y_offset
 				spr(self.sprite, self.x, self.y)
-				self.angle = (self.angle + speed) % (2 * 3.14159265)
+				self.angle = (self.angle + speed) % (2 * pi)
 			end,
 			update=function(self)
 			end
 		}
 		add(self.swords, sword)
-
-		local angle_increment = (2 * 3.14159265) / #self.swords
+		self:reset_swords_angle()
+	end,
+	
+	reset_swords_angle=function(self)
+		local angle_increment = 1 / #self.swords
+		local radius = 12 + player.sword_radius_x
 		local current_angle = 0
 		for s in all(self.swords) do
-			s.angle = current_angle
-			current_angle += angle_increment
+   s.angle = current_angle 
+   s.x = player.x + cos(current_angle) * radius
+   s.y = player.y + sin(current_angle) * radius    
+   current_angle = current_angle + angle_increment
 		end
 	end,
 
@@ -477,14 +483,15 @@ world = {
 	end,
 
 	add_foe=function(self, player, is_boss)
-		local speed = 0.15
-		local xp = 1 * player.level
+		local base_speed = 0.15
+		local speed = base_speed + (0.0010 * player.level)
+		local xp = 1 * ceil(player.level / 4)
 		local sprites = {33, 35, 37, 39, 41, 43, 45, 59}
 		local sprite = flr(rnd(sprites))
 		local health = ceil(1 * (player.level / 3))
 		local sprite_size = 1
+		
 		local margin = 256
-
 		local min_x = max(player.x - margin, sprite_size / 2)
 		local max_x = min(player.x + margin, 1024 - sprite_size / 2)
 		local min_y = max(player.y - margin, sprite_size / 2)
@@ -799,7 +806,7 @@ world = {
 
 	gen_random_xp=function(self)
 		for i=1, 256 do
-			self:add_xp(rnd(1024), rnd(512), rnd(3), false)
+			self:add_xp(rnd(1024), rnd(512), rnd(2), false)
 		end
 	end,
 
@@ -984,7 +991,7 @@ menu_lvl_up = {
 				player.proj_speed_x += 0.2
 			elseif option.name == "dmg" then
 				player.proj_damage_x += 1
-			elseif option.name == "delay" then
+			elseif option.name == "delay" and player.proj_delay_x < 90 then
 				player.proj_delay_x -= 5
 			elseif option.name == "count" then
 				player.proj_count += 1
@@ -1004,8 +1011,8 @@ menu_lvl_up = {
 		elseif option.target == "storm" then
 			if option.name == "storm" then
 				player.storm_on = true
-			elseif option.name == "delay" then
-				player.storm_delay -= 10
+			elseif option.name == "delay" and player.storm_delay < 80 then
+				player.storm_delay -= 5
 			elseif option.name == "radius" then
 				player.storm_radius_x += 1
 			end
@@ -1021,6 +1028,14 @@ menu_lvl_up = {
 }
 
 menu_pause = {
+	state = {
+		proj = 0, 
+		sword = 1,
+		storm = 2
+	},
+	
+	selected_state = 0,
+	
 	draw=function(self)
 		local menu_width=128
 		local menu_height=80
@@ -1040,17 +1055,65 @@ menu_pause = {
 		print(player.xp .. "/" .. player.next_xp, x0 + 70, py - 4)
 		print("radius:" .. player.xp_radius, x0 + 70, py + 4)
 		py += 22
+		if self.selected_state == self.state.proj then
+			self:draw_proj_state(x0, py)
+			spr(49, x0 + 115, py + 14)
+			print(">", x0 + 124, py + 15)
+		elseif self.selected_state == self.state.sword then
+			spr(50, x0 + 4, py + 14)
+			print("<", x0 + 1, py + 15)
+			self:draw_sword_state(x0, py)
+			spr(32, x0 + 115, py + 14)
+			print(">", x0 + 124, py + 15)
+		elseif self.selected_state == self.state.storm then
+			spr(50, x0 + 4, py + 14)
+			print("<", x0 + 1, py + 15)
+			self:draw_storm_state(x0, py)
+		end
+		print("🅾️ to resume", x0 + 40, y1 - 12, 7)
+		line(x0, y1, x0 + menu_width, y1, 7)
+	end,
+	
+	draw_proj_state=function(self, x0, py)
 		spr(50, x0 + 8, py)
 		print("speed:" .. 0.8 + player.proj_speed_x, x0 + 18, py - 4)
 		print("dmg:" .. player.proj_damage_x, x0 + 18, py + 4)
 		print("delay:" .. player.proj_delay - player.proj_delay_x, x0 + 60, py - 4)
 		print("count:" .. player.proj_count, x0 + 44, py + 4)
 		print("pierce:" .. player.proj_max_pierce, x0 + 76, py + 4)
-		print("🅾️ to resume", x0 + 40, y1 - 12, 7)
-		line(x0, y1, x0 + menu_width, y1, 7)
 	end,
+	
+	draw_sword_state=function(self, x0, py)
+		spr(49, x0 + 8, py)
+		print("speed:" .. 0.8 + player.sword_speed_x, x0 + 18, py - 4)
+		print("dmg:" .. 1 + player.sword_attack_x, x0 + 18, py + 4)
+		print("radius:" .. 12 + player.sword_radius_x, x0 + 60, py - 4)
+		print("count:" .. #player.swords, x0 + 44, py + 4)
+	end,
+	
+	draw_storm_state=function(self, x0, py)
+		spr(32, x0 + 8, py)
+		print("delay:" .. 0.8 +  player.storm_delay - player.storm_delay_x, x0 + 18, py - 4)
+		print("dmg:" .. 1 + player.storm_damage, x0 + 18, py + 4)
+		print("radius:" .. 12 + player.storm_radius_x, x0 + 70, py - 4)
+	end,
+	
 	update=function(self)
-
+		decrease_btn_buffer()
+		if is_btn_ready() then
+			if btn(0) then
+				if self.selected_state > self.state.proj then
+					self.selected_state -= 1
+					set_btn_buffer(20)
+				end
+			end
+			if btn(1) then
+				if self.selected_state < self.state.storm then
+					self.selected_state += 1
+							set_btn_buffer(20)
+				end
+			end
+		end
 	end
 }
 
@@ -1127,6 +1190,8 @@ sfx_proj_hit=7
 // sprites
 sprite_wall=98
 sprite_base=64
+
+pi = 3.14159265
 
 actions={}
 
@@ -1219,6 +1284,23 @@ function draw_scaled_sprite_multi(spr_num, x, y, scale, width, height)
 			end
 		end
 	end
+end
+
+function outline_sprite(n,col_outline,x,y,w,h,flip_x,flip_y)
+  -- reset palette to black
+  for c=1,15 do
+    pal(c,col_outline)
+  end
+  -- draw outline
+  for xx=-1,1 do
+    for yy=-1,1 do
+      spr(n,x+xx,y+yy,w,h,flip_x,flip_y)
+    end
+  end
+  -- reset palette
+  pal()
+  -- draw final sprite
+  spr(n,x,y,w,h,flip_x,flip_y)	
 end
 
 
