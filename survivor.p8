@@ -1015,7 +1015,7 @@ menu_lvl_up = {
 			elseif option.name == "delay" and player.storm_delay_x < 80 then
 				player.storm_delay_x += 5
 			elseif option.name == "dmg" then
-				player.storm_dmg += 1
+				player.storm_damage += 1
 			elseif option.name == "radius" then
 				player.storm_radius_x += 1
 			end
