@@ -4,7 +4,7 @@ __lua__
 -- game & player
 game = {
 	name="grassland survivors",
-	version="0.7.1"
+	version="0.7.2"
 }
 
 player = {
@@ -60,11 +60,13 @@ player = {
 		self.whip_on = false
 		self.whip_delay = 100
 		self.whip_delay_x = 0
-		self.whip_radius = 0
+		self.whip_radius = 10
 		self.whip_damage = 2
-		self.whip_damage_x = 0
 		self.whip_counter = 0
 		self.whip_sprite = 57
+		self.whip_draw_left = false
+		self.whip_draw_right = false
+		self.whip_striking = false
 		
 		self.x=512
 		self.y=256
@@ -72,6 +74,7 @@ player = {
 		self.direction=0
 		self.sprite_moving_routine = cocreate(self.update_sprite_routine)
 		self.storm_routine = cocreate(self.storm_sprite_routine)
+		self.whip_routine = cocreate(self.whip_sprite_routine)
 	end,
 
 	draw=function(self)
@@ -80,6 +83,7 @@ player = {
 		self:draw_proj()
 		self:draw_swords()
 		self:draw_storm()
+		self:draw_whip()
 	end,
 
 	draw_player=function(self)
@@ -117,10 +121,21 @@ player = {
 			end
 		end
 	end,
+	
+	draw_whip=function(self)
+		local x = self.x
+		local y = self.y
+		local scale = ceil(self.whip_radius / 15)
+		if self.whip_draw_left then
+			draw_scaled_sprite_multi(self.whip_sprite, x - 8, y - ((scale - 1) * 4), scale,  1, 1)
+		elseif self.whip_draw_right then
+			draw_scaled_sprite_multi(self.whip_sprite + 1, x + 8, y - ((scale - 1) * 4), scale,  1, 1)
+		end
+	end,
 
 	draw_ui=function(self)
-		local x = player.x-64
-		local y = player.y-64
+		local x = self.x-64
+		local y = self.y-64
 		rectfill(x+3, y+4, x + 123, y + 6, 6)
 		if self.xp > 0 then
 			local xp_w = flr((self.xp / self.next_xp) * 123)
@@ -142,6 +157,7 @@ player = {
 		self:update_proj()
 		self:update_swords()
 		self:update_storm()
+		self:update_whip()
 		self:update_sprite()
 		self:update_health()
 	end,
@@ -264,6 +280,22 @@ player = {
 			end
 		end
 	end,
+	
+	update_whip=function(self)
+		if self.whip_on then
+			self.whip_counter += 1
+			if self.whip_counter >= (self.whip_delay - self.whip_delay_x) then
+				self.whip_counter = 0
+				self.whip_striking = true
+			end
+			
+			if self.whip_striking then
+				if costatus(self.whip_routine) != "dead" then
+					coresume(self.whip_routine, self)
+				end
+			end
+		end
+	end,
 
 	storm_sprite_routine=function(self)
 		while true do
@@ -286,6 +318,21 @@ player = {
 			self.storm_sprite_bottom = nil
 			self.storm_target = nil
 			self.storm_radius = 0
+		end
+	end,
+	
+	whip_sprite_routine=function(self)
+		while true do
+			self.whip_draw_left = true
+			world:hit_foes_coord_radius(self.whip_damage, self.x - 8, self.y, self.whip_radius)
+			delay(12)
+			self.whip_draw_left = false
+			self.whip_draw_right = true
+			world:hit_foes_coord_radius(self.whip_damage, self.x + 8, self.y, self.whip_radius)
+			delay(12)
+			self.whip_striking = false
+			self.whip_draw_right = false
+			delay(1)
 		end
 	end,
 
@@ -683,7 +730,7 @@ world = {
 		local sprite = 17
 		local is_collector = false
 		if is_foe then
-			if flr(rnd(100)) == 0 then
+			if flr(rnd(200)) == 0 then
 				is_collector = true
 			end
 			if is_collector then
@@ -803,6 +850,17 @@ world = {
 			end
 		end
 	end,
+	
+	hit_foes_coord_radius=function(self, damage, x, y, radius)
+		for foe in all(self.foes) do
+			local dx = foe.x - x
+			local dy = foe.y - y
+			local distance = sqrt(dx*dx + dy*dy)
+			if distance <= radius then
+				foe:hit(damage)
+			end
+		end
+	end,
 
 	gen_random_xp=function(self)
 		for i=1, 256 do
@@ -845,6 +903,7 @@ menu_lvl_up = {
 	options = nil,
 	sword_options_added = false,
 	storm_options_added = false,
+	whip_options_added = false,
 
 	sword_options = {
 		{target="sword", name="radius", subtitle="+2% sword radius", sprite=49},
@@ -854,8 +913,14 @@ menu_lvl_up = {
 
 	storm_options = {
 		{target="storm", name="delay", subtitle="-10% storm delay", sprite=32},
-		{target="storm", name="dmg", subtitle="+1 storm smg", sprite=32},
+		{target="storm", name="dmg", subtitle="+1 storm dmg", sprite=32},
 		{target="storm", name="radius", subtitle="%10% storm radius", sprite=32},
+	},
+	
+	whip_options = {
+		{target="whip", name="delay", subtitle="-10% whip delay", sprite=56},
+		{target="whip", name="dmg", subtitle="+1 whip dmg", sprite=56},
+		{target="whip", name="radius", subtitle="%10% whip radius", sprite=56},
 	},
 
 	init=function(self)
@@ -871,6 +936,7 @@ menu_lvl_up = {
 			{target="sword", name="count", subtitle="+1 spinning sword", sprite=49},
 			{target="storm", name="storm", subtitle="regularly call a storm", sprite=32},
 			{target="world", name="curse", subtitle="+20% monsters spawn", sprite=21},
+			{target="whip", name="whip", subtitle="add a whip sriking both sides", sprite=56},
 		}
 	end,
 
@@ -941,6 +1007,20 @@ menu_lvl_up = {
 				end
 			end
 		end
+	
+		if player.whip_on and not self.whip_options_added then
+			self.whip_options_added = true
+			for option in all(self.whip_options) do
+				add(self.choices, option)
+			end
+
+			for option in all(self.choices) do
+				if option.target == "whip" and option.name == "whip" then
+					del(self.choices, option)
+				end
+			end
+		end
+		
 		if self.options == nil then
 			self.options = self:make_options()
 		end
@@ -1019,6 +1099,16 @@ menu_lvl_up = {
 			elseif option.name == "radius" then
 				player.storm_radius_x += 1
 			end
+		elseif option.target == "whip" then
+			if option.name == "whip" then
+				player.whip_on = true
+			elseif option.name == "delay" and player.storm_delay_x < 80 then
+				player.whip_delay_x += 5
+			elseif option.name == "dmg" then
+				player.whip_damage += 1
+			elseif option.name == "radius" then
+				player.whip_radius += 1
+			end
 		elseif option.target == "world" then
 			if option.name == "curse" then
 				world.foe_x += 2
@@ -1034,7 +1124,8 @@ menu_pause = {
 	state = {
 		proj = 0, 
 		sword = 1,
-		storm = 2
+		storm = 2,
+		whip = 3,
 	},
 	
 	selected_state = 0,
@@ -1069,9 +1160,15 @@ menu_pause = {
 			spr(32, x0 + 115, py + 14)
 			print(">", x0 + 124, py + 15)
 		elseif self.selected_state == self.state.storm then
-			spr(50, x0 + 4, py + 14)
+			spr(49, x0 + 4, py + 14)
 			print("<", x0 + 1, py + 15)
 			self:draw_storm_state(x0, py)
+			spr(56, x0 + 115, py + 14)
+			print(">", x0 + 124, py + 15)
+		elseif self.selected_state == self.state.whip then
+			spr(32, x0 + 4, py + 14)
+			print("<", x0 + 1, py + 15)
+			self:draw_whip_state(x0, py)
 		end
 		print("🅾️ to resume", x0 + 40, y1 - 12, 7)
 		line(x0, y1, x0 + menu_width, y1, 7)
@@ -1090,7 +1187,7 @@ menu_pause = {
 		spr(49, x0 + 8, py)
 		print("speed:" .. 0.8 + player.sword_speed_x, x0 + 18, py - 4)
 		print("dmg:" .. 1 + player.sword_attack_x, x0 + 18, py + 4)
-		print("radius:" .. 12 + player.sword_radius_x, x0 + 60, py - 4)
+		print("radius:" .. 12 + player.sword_radius_x, x0 + 70, py - 4)
 		print("count:" .. #player.swords, x0 + 44, py + 4)
 	end,
 	
@@ -1099,6 +1196,13 @@ menu_pause = {
 		print("delay:" .. flr(player.storm_delay - player.storm_delay_x), x0 + 18, py - 4)
 		print("dmg:" .. player.storm_damage, x0 + 18, py + 4)
 		print("radius:" .. 12 + player.storm_radius_x, x0 + 70, py - 4)
+	end,
+	
+	draw_whip_state=function(self, x0, py)
+		spr(56, x0 + 8, py)
+		print("delay:" .. flr(player.whip_delay - player.whip_delay_x), x0 + 18, py - 4)
+		print("dmg:" .. player.whip_damage, x0 + 18, py + 4)
+		print("radius:" .. player.whip_radius, x0 + 70, py - 4)
 	end,
 	
 	update=function(self)
@@ -1111,7 +1215,7 @@ menu_pause = {
 				end
 			end
 			if btn(1) then
-				if self.selected_state < self.state.storm then
+				if self.selected_state < self.state.whip then
 					self.selected_state += 1
 							set_btn_buffer(20)
 				end
@@ -1421,12 +1525,12 @@ ac5cc5ca000c0000000c0000644aa44660a00a060700007000000000000000000000000000005100
 000a0000092929000929290009c88c9009cccc900774000004770000000000000000000009292290092929000606009906060090922299000922229000000000
 00a00900009090000090900000888800008888000400040000040000011111100111111009229900092929000500500950050000929929009299999000000000
 090a0000000500000000000000000000008cc8000000000000000000000000000444440000000000000000001b0000b100009090008000000000000000000000
-00a0000000656000008cc8000000000000caac0007700770070000700000000040000040000000770000000001b00b1090b00b00000080000000800800000800
-000a09000065600000caac00008cc80000caac00007007000070070000700700408840400777770000000777090440000b1441b0008000800080000000000000
-0900a0000065600000caac0000caac00008cc8000000000000000000000000004000404077000000000077000084480001844810800088000000880000800000
-00000a0060656060008cc80000caac000000000000000000000000000000000004440040770000000000700000a88a0000888800088888000088808000000800
-0400a0041608061000000000008cc80000555500007007000070070000700700000000400770000000007777908aa80990a88a09088888088088000000008000
-400a0040011411000055550000000000000000000770077007000070000000000664440000077777000000000000000000000000000008000000008000808000
+00a0000000656000008cc8000000000000caac0007700770070000700000000040000040000000777777000001b00b1090b00b00000080000000800800000800
+000a09000065600000caac00008cc80000caac00007007000070070000700700408840400777770000007700090440000b1441b0008000800080000000000000
+0900a0000065600000caac0000caac00008cc8000000000000000000000000004000404077000000000007700084480001844810800088000000880000800000
+00000a0060656060008cc80000caac000000000000000000000000000000000004440040770000000000007000a88a0000888800088888000088808000000800
+0400a0041608061000000000008cc80000555500007007000070070000700700000000400770000000000770008aa80990a88a09088888088088000000008000
+400a0040011411000055550000000000000000000770077007000070000000000664440000077777777770000000000000000000000008000000008000808000
 04a04000000800000000000000555500000000000000000000000000000000000000000000000000000000000111111001111110080000000808000000000000
 3333333333333333333553333333333333333333333334333333333333bbbb334333333333333633333333333333333333333333333333333333333333333333
 333333333333333333555533333633d33d33333333933333333333333b8bbbb34443333333333333333333333388333333333333333336333333331338338333
