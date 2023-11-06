@@ -4,7 +4,7 @@ __lua__
 -- game & player
 game = {
 	name="grassland survivors",
-	version="0.7.2"
+	version="0.8"
 }
 
 player = {
@@ -232,7 +232,11 @@ player = {
 			sfx(sfx_level_up)
 			self.xp = 0
 			self.level += 1
-			self.next_xp = ceil(self.next_xp * 1.2)
+			if self.level < 20 then
+				self.next_xp = self.next_xp + 5
+			else
+				self.next_xp = self.next_xp + 10
+			end
 			state = state_lvl_up
 		end
 	end,
