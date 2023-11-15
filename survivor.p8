@@ -4,7 +4,7 @@ __lua__
 -- game & player
 game = {
 	name="grassland survivors",
-	version="0.8.5"
+	version="0.8.6"
 }
 
 player = {
@@ -571,10 +571,10 @@ world = {
 			attack = 3
 		elseif is_last_boss then
 			speed += 2
-			health += 300
+			health += 1000
 			sprite = 101
 			sprite_size = 2
-			attack = 8
+			attack = 10
 		end
 		local foe = {
 			health=health,
@@ -671,7 +671,7 @@ world = {
 				end
 				if self.sword_immune_counter == 0 then
 					for sword in all(player.swords) do
-						if is_colliding(self, sword) then
+						if not self.is_dead and is_colliding(self, sword) then
 							local dmg = sword.attack + player.sword_attack_x
 							self:hit(dmg)
 							self.sword_immune_counter = 15
@@ -1338,7 +1338,7 @@ menu_game_over = {
 menu_win = {
 	draw=function(self)
 		draw_logo()
-		local s = "you win, nothing"
+		local s = "you won, touch grass"
 		print(s, 64-#s*2, 61, 10)
 		
 		draw_stats()
